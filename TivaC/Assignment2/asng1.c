@@ -1,15 +1,3 @@
-/*  Modified By: Rishawn Peppers Johnson
- *  Date Created: 20 October 2020
- *  Device: TivaC123GH6PM
- *  CpE 403 Assignment 02
- *
- *  Purpose: Interface the TivaC123GH6PM with the Educational BoosterPack MKII to
- *      read the ambient and object temperature from the MKII's tmp006.
- *
- *  Inputs: tmp006 - Ambient and object temperature.
- *  Outputs: Ambient and Object temperature through UART.
- *
- *  */
 //*****************************************************************************
 //
 // temperature_tmp006.c - Example to use of the SensorLib with the TMP006
@@ -49,9 +37,7 @@
 #include "sensorlib/hw_tmp006.h"
 #include "sensorlib/i2cm_drv.h"
 #include "sensorlib/tmp006.h"
-#define GLOBAL_Q    20
-#include"IQmath/IQmathLib.h"
-
+#include "drivers/rgb.h"
 
 //*****************************************************************************
 //
@@ -75,7 +61,7 @@
 // Define TMP006 I2C Address.
 //
 //*****************************************************************************
-#define TMP006_I2C_ADDRESS      0x40
+#define TMP006_I2C_ADDRESS      0x41
 
 //*****************************************************************************
 //
@@ -171,6 +157,19 @@ TMP006AppErrorHandler(char *pcFilename, uint_fast32_t ui32Line)
     UARTprintf("\033[0m");
 
     //
+    // Set RGB Color to RED
+    //
+    g_pui32Colors[0] = 0xFFFF;
+    g_pui32Colors[1] = 0;
+    g_pui32Colors[2] = 0;
+    RGBColorSet(g_pui32Colors);
+
+    //
+    // Increase blink rate to get attention
+    //
+    RGBBlinkRateSet(10.0f);
+
+    //
     // Go to sleep wait for interventions.  A more robust application could
     // attempt corrective actions here.
     //
@@ -204,18 +203,18 @@ TMP006I2CIntHandler(void)
 //
 //*****************************************************************************
 void
-IntGPIOa(void)
+IntGPIOe(void)
 {
     uint32_t ui32Status;
 
-    ui32Status = GPIOIntStatus(GPIO_PORTA_BASE, true);
+    ui32Status = GPIOIntStatus(GPIO_PORTE_BASE, true);
 
     //
     // Clear all the pin interrupts that are set
     //
-    GPIOIntClear(GPIO_PORTA_BASE, ui32Status);
+    GPIOIntClear(GPIO_PORTE_BASE, ui32Status);
 
-    if(ui32Status & GPIO_PIN_2)
+    if(ui32Status & GPIO_PIN_0)
     {
         //
         // This interrupt indicates a conversion is complete and ready to be
@@ -276,12 +275,13 @@ main(void)
     //
     // Setup the system clock to run at 40 Mhz from PLL with crystal reference
     //
-    ROM_SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN);
+    ROM_SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ |
+                       SYSCTL_OSC_MAIN);
 
     //
     // Enable the peripherals used by this example.
     //
-    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
 
     //
     // Initialize the UART.
@@ -291,20 +291,35 @@ main(void)
     //
     // Print the welcome message to the terminal.
     //
-    UARTprintf("Terminal Active\n");
+    UARTprintf("\033[2J\033[1;1HTMP006 Example\n");
+
+    //
+    // Setup the color of the RGB LED.
+    //
+    g_pui32Colors[RED] = 0;
+    g_pui32Colors[BLUE] = 0xFFFF;
+    g_pui32Colors[GREEN] = 0;
+
+    //
+    // Initialize the RGB Driver and start RGB blink operation.
+    //
+    RGBInit(0);
+    RGBColorSet(g_pui32Colors);
+    RGBIntensitySet(0.5f);
+    RGBEnable();
 
     //
     // The I2C3 peripheral must be enabled before use.
     //
-    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_I2C1);
-    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_I2C3);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
 
     //
     // Configure the pin muxing for I2C3 functions on port D0 and D1.
     // This step is not necessary if your part does not support pin muxing.
     //
-    ROM_GPIOPinConfigure(GPIO_PA6_I2C1SCL);
-    ROM_GPIOPinConfigure(GPIO_PA7_I2C1SDA);
+    ROM_GPIOPinConfigure(GPIO_PD0_I2C3SCL);
+    ROM_GPIOPinConfigure(GPIO_PD1_I2C3SDA);
 
     //
     // Select the I2C function for these pins.  This function will also
@@ -312,16 +327,16 @@ main(void)
     // open-drain operation with weak pull-ups.  Consult the data sheet
     // to see which functions are allocated per pin.
     //
-    GPIOPinTypeI2CSCL(GPIO_PORTA_BASE, GPIO_PIN_6);
-    ROM_GPIOPinTypeI2C(GPIO_PORTA_BASE, GPIO_PIN_7);
+    GPIOPinTypeI2CSCL(GPIO_PORTD_BASE, GPIO_PIN_0);
+    ROM_GPIOPinTypeI2C(GPIO_PORTD_BASE, GPIO_PIN_1);
 
     //
     // Configure and Enable the GPIO interrupt. Used for DRDY from the TMP006
     //
-    ROM_GPIOPinTypeGPIOInput(GPIO_PORTA_BASE, GPIO_PIN_2);
-    GPIOIntEnable(GPIO_PORTA_BASE, GPIO_PIN_2);
-    ROM_GPIOIntTypeSet(GPIO_PORTA_BASE, GPIO_PIN_2, GPIO_FALLING_EDGE);
-    ROM_IntEnable(INT_GPIOA);
+    ROM_GPIOPinTypeGPIOInput(GPIO_PORTE_BASE, GPIO_PIN_0);
+    GPIOIntEnable(GPIO_PORTE_BASE, GPIO_PIN_0);
+    ROM_GPIOIntTypeSet(GPIO_PORTE_BASE, GPIO_PIN_0, GPIO_FALLING_EDGE);
+    ROM_IntEnable(INT_GPIOE);
 
     //
     // Keep only some parts of the systems running while in sleep mode.
@@ -331,9 +346,12 @@ main(void)
     // I2C3 is the I2C interface to the TMP006
     //
     ROM_SysCtlPeripheralClockGating(true);
-    ROM_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_GPIOA);
+    ROM_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_GPIOE);
     ROM_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_UART0);
-    ROM_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_I2C1);
+    ROM_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_TIMER0);
+    ROM_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_TIMER1);
+    ROM_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_I2C3);
+    ROM_SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_WTIMER5);
 
     //
     // Enable interrupts to the processor.
@@ -341,17 +359,17 @@ main(void)
     ROM_IntMasterEnable();
 
     //
-    // Initialize I2C1 peripheral.
+    // Initialize I2C3 peripheral.
     //
-    I2CMInit(&g_sI2CInst, I2C1_BASE, INT_I2C1, 0xff, 0xff,
+    I2CMInit(&g_sI2CInst, I2C3_BASE, INT_I2C3, 0xff, 0xff,
              SysCtlClockGet());
 
     //
     // Initialize the TMP006
     //
-    volatile uint_fast8_t temp;
-    temp = TMP006Init(&g_sTMP006Inst, &g_sI2CInst, TMP006_I2C_ADDRESS,
+    TMP006Init(&g_sTMP006Inst, &g_sI2CInst, TMP006_I2C_ADDRESS,
                TMP006AppCallback, &g_sTMP006Inst);
+
     //
     // Put the processor to sleep while we wait for the I2C driver to
     // indicate that the transaction is complete.
@@ -413,7 +431,7 @@ main(void)
     // Last thing before the loop start blinking to show we got this far and
     // the tmp006 is setup and ready for auto measure
     //
-    //RGBBlinkRateSet(1.0f);
+    RGBBlinkRateSet(1.0f);
 
     //
     // Loop Forever
@@ -452,28 +470,26 @@ main(void)
         // Convert the floating point ambient temperature  to an integer part
         // and fraction part for easy printing.
         //
-        _iq qAmbient, InterPart, FracPart;
-        qAmbient = _IQ(fAmbient);
-        InterPart = _IQint(qAmbient);
-        FracPart = _IQfrac(qAmbient);
-        if (InterPart < 0) {
-            InterPart *= -1;
+        i32IntegerPart = (int32_t)fAmbient;
+        i32FractionPart = (int32_t)(fAmbient * 1000.0f);
+        i32FractionPart = i32FractionPart - (i32IntegerPart * 1000);
+        if(i32FractionPart < 0)
+        {
+            i32FractionPart *= -1;
         }
-        UARTprintf("Ambient %3d.%03d\t", InterPart, FracPart);
+        UARTprintf("Ambient %3d.%03d\t", i32IntegerPart, i32FractionPart);
 
         //
         // Convert the floating point ambient temperature  to an integer part
         // and fraction part for easy printing.
         //
-        _iq30 qObject = _IQ(fObject);
-        InterPart = _IQint(qObject);
-        FracPart = _IQfrac(qObject);
-        if (InterPart < 0) {
-            InterPart *= -1;
+        i32IntegerPart = (int32_t)fObject;
+        i32FractionPart = (int32_t)(fObject * 1000.0f);
+        i32FractionPart = i32FractionPart - (i32IntegerPart * 1000);
+        if(i32FractionPart < 0)
+        {
+            i32FractionPart *= -1;
         }
-        UARTprintf("Object %3d.%03d\n", InterPart, FracPart);
-
-
-
+        UARTprintf("Object %3d.%03d\n", i32IntegerPart, i32FractionPart);
     }
 }
